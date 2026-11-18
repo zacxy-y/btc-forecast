@@ -1,0 +1,399 @@
+# GTA VI Twitch CCU forecast 01: forecast, hour by hour, how many people watch Grand Theft Auto VI live on Twitch over
+# the 24 UTC hours of its release day, 2026-11-19, from everything recorded up to the end of its first hour, that
+# hour's count included, as five quantiles an hour. SEALED (2026-11-17): open and public, its escrow funded at
+# open, so once seeded its bytes and its three sealed trees never change again (contest-design.mdc). Copied from competitions/polymarket-nvidia-ceo-forecast-01
+# (per-file cases, a pinball loss, a checkpoint race, a house model forecast kind) and refreshed sentence by sentence to
+# the root planner's design contract (.tmp/gta6-ccu/DESIGN.md of the launch chat, pinned p1); a change to any shared
+# name, schema or figure below goes back to it first.
+#
+# The owner's ask (2026-11-17), verbatim: "write a program that will predict the 24h CCU graph of GTA 6 after release
+# hour by hour after the first hourly CCU print arrives (your program will have access to that print), $250 total prize
+# , most accurate wins, runs as a race after it locks over the 24h of GTA 6 release date."
+#
+# Why Twitch viewers. Grand Theft Auto VI releases on 19 November 2026 on PlayStation 5 and Xbox Series X|S only (no PC
+# until 2027) and is single-player: no console maker publishes a player count, so there is no public CCU of the game
+# itself. The CCU this contest measures is Twitch's own count of concurrent live viewers in the "Grand Theft Auto VI"
+# category, the figure Twitch's directory page shows and the press quotes for a launch (the root's decision, pin p2).
+# It is public, read once a minute by anyone, and it moves with the launch the way a player count would. Why a
+# forecaster of it beats the public alternatives: there is no public forecast of a launch's hour-by-hour audience
+# curve, only after-the-fact charts (TwitchTracker, SullyGnome), and the winner must beat both house entries below
+# with a calibrated spread, which a chart read by eye does not give.
+#
+# The source: POST https://gql.twitch.tv/gql with the header Client-Id kimne78kx3ncx6brgo4mv6wki5h1ko (Twitch's public
+# web client id, no secret), query game(id: "1867279146") { id name viewersCount broadcastersCount }. Probed
+# 2026-11-17T03:10Z: {"id":"1867279146","name":"Grand Theft Auto VI","viewersCount":1240,"broadcastersCount":181}
+# (Grand Theft Auto V, id 32982, read 81,611 viewers and 3,514 channels at the same read).
+#
+# The recorder (collector/twitch-ccu/ fetch.ts, record.ts, cli.ts; deploy/k8s/components/gta6-twitch-ccu, Deployment
+# makefun-twitch-ccu-recorder-gta6): one read a minute, started at second 0 of the minute, up to 3 tries inside the
+# minute at a 10 s timeout each, never two lines for one minute, one line per minute in reads.ndjson (schema
+# makefun/twitch-ccu-read/v1: minute, at, ok, game {id, name, viewers, channels}, the category's top 20 live streams,
+# Twitch's top 20 categories, the raw response's sha256), recording gta6-twitch-ccu under the data root at
+# twitch-ccu/gta6-twitch-ccu/record/ (record.json + reads.ndjson), until 2026-11-20T00:10:00Z, resuming and never
+# rewriting a line. It runs twice, makefun-prod (primary) and makefun-dev (backup); the freeze takes prod's read for a
+# minute and fills a minute prod lacks from dev's. A valid read: ok true, game.id "1867279146", viewers and channels
+# non-negative integers.
+#
+# The clock (collector/twitch-ccu/hours.ts, the one implementation the freeze, the practice cut and the race source
+# import). T0 = 2026-11-19T00:00:00Z, the UTC release day (the unlock rolls at local midnight: New Zealand first at
+# 2026-11-18T11:00Z, CET 23:00Z, the UK 2026-11-19T00:00Z, US Eastern 05:00Z, US Pacific 08:00Z). Hour h (1..24) is
+# [T0 + (h-1) h, T0 + h h). An hour's print is the mean of game.viewers over the valid reads whose minute lies in the
+# hour, rounded half up to an integer, with at least 30 valid reads of its 60; an hour with fewer has no print. W0 =
+# the deadline = 2026-11-19T01:00:00Z, the end of hour 1: entries lock there, so the final's one case, h00, holds every
+# valid read before W0 and hour 1's print (with fewer than 30 reads in hour 1, the mean of whatever valid reads it has,
+# at least 1; with none there is no final answer). Scored: hours 2..24, 23 hours, the last ending 2026-11-20T00:00:00Z;
+# the final answer needs at least 12 of the 23 printed, or there is no answer, no grade and no prize.
+#
+# The case (makefun/twitch-ccu-case/v1, <id>.in): schema, id, game {name, twitch_id}, day_start, checkpoint, levels
+# [0.05, 0.25, 0.5, 0.75, 0.95], known (hour 1's print: from, until, viewers, channels, reads), forecast (hours 2..24,
+# 23 rows), history (every valid point before the checkpoint, oldest first: the recorder's minute reads in the final,
+# the historical source's points in the practice, channels possibly null), history_hourly (whole-hour means), streams
+# (the top streams at the last valid read before the checkpoint; null in the practice), categories_hourly (null in the
+# practice), comparables (past big launches' hourly curves; a practice case's exclude every practice launch, the
+# final's include them all) and notes. The forecast (/output/<id>.out, a regular file, never a link):
+# {"hours": [{"hour": 2, "q": [q05, q25, q50, q75, q95]}, ...]}, no other key at the top or in a row, exactly 23 rows,
+# hours 2..24 each once in any order, each q five finite numbers > 0 and at most 1e9, non-decreasing, at most 65,536
+# bytes. The answer (reference/answer.json, makefun/twitch-ccu-answer/v1, min_hours 12, per case its hour-1 print
+# print_1, the invalid case's fallback, and its printed hours only) and reference/manifest.json ({"cases": [{"id":
+# "h00", "time_cap_ms": 8000}]}, the grader's per-file manifest, as the sibling's).
+#
+# The score (scorer/score.ts and scorer/forecast.ts, node22 stdlib, per-file cases; the race source imports
+# scorer/forecast.ts, so the race and the grade use one loss): each (case, printed hour h, level tau) is one item,
+# 2 * max(tau * d, (tau - 1) * d) with d = ln(y) - ln(q_tau), y the hour's print, a print below 1 viewer counted as 1
+# (VIEWER_FLOOR). loss is the mean over every item, 6
+# decimals, lower better: the rank. The factor 2 makes a forecast whose five quantiles are equal score exactly its mean
+# absolute log error, so "most accurate" and an honest spread are one scale. typical_miss_pct = 100 * (exp(mean over
+# (case, hour) of |ln y - ln q50|) - 1), 2 decimals, and coverage_90 (the share of (case, hour) with q05 <= y <= q95)
+# are information; valid is the gate (1 only when every case's forecast is valid); run_ms (the grader's run.json
+# wall_ms, the run time per execution over every case) breaks an exact tie, faster first, then the earlier receipt
+# (.cosmos/rules/contest-design.mdc). An invalid case scores as if every quantile equalled its hour-1 print, and makes
+# valid 0.
+#
+# The race (server/race/forecast/spec.ts FORECAST_RACES, source 'twitch-ccu',
+# server/race/forecast/sources/twitch-ccu.ts): places 1, cadence 60 minutes, at most 256 racers seated by dev rank
+# (stage_by dev_rank), 23 interval reads at
+# 2026-11-19T02:00Z .. 2026-11-20T00:00Z (instantsAfter W0, 60, 23), mark pinball, captures every 1,440 minutes prefixed
+# h (one capture per racer: case h00 at W0, its input exactly the freeze's h00.in built from the live recording), 8
+# captures in flight; the read at T scores hour (T - 60 min, T]. Its marks are provisional; the result is the official
+# grade on the frozen recording. The owner's "runs as a race after it locks".
+#
+# The house entries (prize_requires_beating_baseline: a prize needs a loss strictly below the best of them). The
+# persistence baseline (baseline/main.ts, the kit's starter/main.ts byte for byte, starter/main.py the same numbers):
+# q50 is the hour-1 print for every hour, q_tau = print_1 * exp(z_tau * 0.15 * sqrt(h - 1)) rounded to 2 decimals
+# (print_1 at least 1), z = (-1.645, -0.674, 0, 0.674, 1.645), fixed in advance, entered by the automation from
+# house.yaml 4 hours before the deadline. The house
+# model one-shot (grader/house-forecast.ts kind twitch-ccu, scripts/competitions/house-forecast.ts --slug
+# gta6-twitch-ccu-forecast-01 --phase dev|final --model superbot --reasoning-effort max): superbot at reasoning effort
+# max (.cosmos/rules/house-models.mdc, 64,000 output tokens), one recorded call a phase (asked once more, the same
+# prompt, only if its first answer is not valid: HOUSE_FORECAST_ATTEMPTS 2), answering per case id 23 median ratios
+# r_h (to the case's hour-1 print) and 23 log spreads s_h, replayed per case with no model call: q_tau = print_1 * r_h
+# * exp(z_tau * s_h). Dev: one call over the practice cases. Final: one call at 2026-11-18T23:00:00Z (W0 - 2 h) on the
+# history to then (no hour-1 print yet: the ratios carry it), replayed on h00. Both are flagged baseline; the rules
+# name the model.
+#
+# The house baseline's practice result: loss 0.387, typical miss 82.8%,
+# coverage 0.783 (3 significant figures at most: contest-design.mdc).
+#
+# The practice (dev phase; collector/twitch-ccu/practice.ts, launches.json): per-file cases p00 to p03, each one
+# past big game launch's release day from a public historical source (SullyGnome.com's hourly Twitch category averages), cut by the final's rule:
+# day_start 00:00 UTC on the release date (the real unlock in notes), checkpoint an hour later, hours 2..24 its
+# answer, its history the source's points before the checkpoint. The launches: Marvel's Wolverine (2026-09-15), Red Dead Redemption 2 (2018-10-26), God of War Ragnarök (2022-11-09) and Marvel's Spider-Man 2 (2023-10-20), all console games that unlocked at midnight local time. No case file holds
+# another's answer (each is another launch, and the comparables leave every practice launch out: the preflight's
+# practice-lookup); input/NOTICE.txt names each source.
+#
+# Format: program/v1, cases: per-file beside final_dataset: true (contracts/competition.ts): each case run alone in a
+# sandbox of its own, /input holding only <id>.in, its /output/<id>.out kept only when that run ended ok
+# (grader/program.ts executePerCase), under its manifest's time_cap_ms (8,000). The final grades on the dataset
+# gta6-twitch-ccu-forecast-01-final, frozen from the recording (collector/twitch-ccu/freeze.ts) and attached to the
+# final phase by the automation in that phase (server/admin/dataset-register.ts, server/competitions/lifecycle/auto.ts).
+# The dev phase grades on this directory's own sealed practice instance (input/, reference/).
+#
+# Money: the catalogue's twenty-place table, $50 / $35 / $25 / $10 x7 / $7 x10 = $250 (tests/unit/catalogue.test.ts
+# TWENTY_PLACE_TABLE; the owner's "$250 total prize, most accurate wins"; the owner answered "Publish: 20 places"),
+# each place titled as the catalogue's tables list it. Full automation (lifecycle true, payouts auto), the escrow funded
+# at open (automation.escrow: at_open; server/competitions/load.ts escrowAtOpenIssues): the rules' Entries and Payout
+# and the criteria's and announcement's payout lines say both outcomes in the btc-race release template's words
+# (server/releases/templates/btc-race.ts; ESCROW_AT_OPEN_SAYS). No challenge window is named. The board copy (title,
+# summary, demand) stays off tests/unit/support/public-copy.ts OFF_BOARD words.
+#
+# Entries: Force_Last, at most 10 a day and 20 in all, transcripts required, an OSI license, the repository created
+# after the opening, authorship 12 (the kit's starter left out of the counted lines). Field: the recent forecast
+# bounties drew 3,897 (polymarket-nvidia-ceo-forecast-01) and 3,499 (roblox-up-and-coming-forecast-01) submissions:
+# sized for 4,000 and 40,000.
+#
+# Dates and why (the opening set at the seal, 2026-11-17T04:00Z: the first whole hour about two hours after it, room for
+# the dev and prod deploys and seeds, on the hour and over 30 minutes from every other opening (roblox-game-02 opens at
+# 16:00Z); the owner's "Publish: 20 places, ASAP"; every other date is fixed by the launch, not by the opening):
+#   2026-11-17T06:00:00Z   opens_at, the dev phase's start
+#   2026-11-18T21:00:00Z   the house baseline entered (server/competitions/house-entry-due.ts: deadline - 4 h)
+#   2026-11-18T23:00:00Z   the house model forecast's final call (W0 - 2 h)
+#   2026-11-19T00:00:00Z   T0, the release day's first UTC hour
+#   2026-11-19T01:00:00Z   the deadline = W0 = h00, the end of hour 1, so the program sees that hour's print; the dev
+#                          phase's end; the race's capture
+#   2026-11-19T02:00:00Z   the race's first read (hour 2) .. 2026-11-20T00:00:00Z its 23rd (hour 24)
+#   2026-11-20T00:00:00Z   the final phase's start, the recorded day's end (a forecast window is an outcome, not a
+#                          delay: tests/unit/final-start-floor.test.ts), where the automation attaches the freeze
+#   2026-11-20T00:10:00Z   the recorder's --until
+#   2026-11-20T06:00:00Z   the final phase's end
+#
+# Grading budget and load (scripts/new-bounty-preflight.ts, 2026-11-17T03:52Z, as priced): at 2,000 entries the final
+# 1.02 hours expected and 2.13 worst, the practice 0.08 of its lane-days a day; pods 48 at once on s9 and 88 pod-seconds
+# an entry at 2,000 and at 20,000 entries alike (the 48 grading lanes bound it), beside the 141 sandbox pods s9 ran
+# live and the 99 pods on s18 at that read. The grading path is polymarket-nvidia-ceo-forecast-01's, unchanged: a
+# per-file final_dataset program/v1 grade (a submission, a transcript ingest, a grade landing and an audit each read
+# their own entry; the final cut and resolve read each entry's latest run once a phase), and that bundle graded a
+# 3,897-submission field on it, so no rig proof was owed for a field of about 4,000 (40,000 is the same O(1) reads per
+# event, 10 times the events). The race (server/race/forecast/sources/twitch-ccu.ts) reads the recording's file, not
+# the database, and runs each of at most 256 racers once at W0, 8 captures at once (8 sandbox pods), then marks 23
+# hourly reads. A grade makes 2 x its cases + 1 pods in turn: 3 on the final's one case, 2 x 4 + 1
+# on the practice. limits.wall_budget_sec states the practice's per-execution cost, its 4 cases x (8 s cap + about
+# 10 s pod start) = 72 s, above the final's 18 s.
+#
+# Seal: once this bundle is seeded open its bytes and its sealed trees never change again
+# (server/db/seed/competitions.ts refuseRulesChange); a fix is a new slug.
+version: 1
+
+competition:
+  slug: gta6-twitch-ccu-forecast-01
+  title: Forecast GTA VI's launch-day Twitch viewers hour by hour
+  summary: "Write a program that reads the Twitch viewer count of Grand Theft Auto VI up to the end of the first hour of its release day, 2026-11-19 (UTC), and forecasts how many people will be watching it live on Twitch in each of the other 23 hours, as five quantiles an hour, for the lowest pinball loss on the log scale: places go by that loss, lowest first, so 1st place is the best forecast, and a forecast must also beat our house forecasts to take any place, so one that beats them but ranks below 20th wins nothing; the lowest loss wins $50, 2nd place $35, 3rd place $25, 4th to 10th place $10 each and 11th to 20th place $7 each."
+  demand: Publishers, streamers and analysts who want a calibrated forecast of a big launch's day-one audience from its first hour, one that says how many will watch each hour and how sure it is.
+  category: Forecasting
+  skills: [Forecasting, Time series, Statistics, Video games, TypeScript, Python]
+  status: open
+  visibility: public
+  sponsor: make-fun
+  reward_usd: 250
+  opens_at: "2026-11-17T06:00:00Z"
+  deadline: "2026-11-19T01:00:00Z"
+  description: |-
+    Grand Theft Auto VI comes out on 19 November 2026, and on its first day millions may watch it being played live. We want a forecaster that, one hour into the release day, says honestly how many people will be watching it in each of the hours left, and how sure it is.
+
+    ## Context
+    GTA VI is a console game (PlayStation 5 and Xbox Series X|S), and no console maker publishes a player count, so there is no public count of people playing it. What this contest counts is the next best thing, public and live: Twitch's own count of the people watching live streams in its "Grand Theft Auto VI" category, which the house reads every minute. An hour's count is the mean of that hour's minute reads.
+
+    Your entry is a program that reads one case and writes, for each of hours 2 to 24 of the release day (UTC), five quantiles of that hour's count (5%, 25%, 50%, 75% and 95%). The final has one case, cut at the deadline, 2026-11-19 01:00 UTC, the end of the day's first hour: everything the house recorded before it and that first hour's count. It runs offline in the sandbox, with no network, and nothing calls a model.
+
+    Before the deadline every entry is scored on a practice of past big launches' release days, and its score shows as it lands. After the deadline the final runs as a race you can watch, scored hour by hour as each hour's count comes in, and the result is graded on the whole recorded day. The score is a pinball loss on the log scale: a forecast whose five quantiles are equal scores exactly its mean miss in log terms, so the most accurate forecast with an honest spread wins. Ties are broken by the faster program. A reward needs a lower loss than the best house entry: the house baseline, which says every hour stays at the first hour's count with a spread that widens over the day, and a forecast by a house AI model. Once the recorded day is frozen and attached, everything runs by itself, with no further admin step unless a check holds it, and each winner claims the reward in USDC on Solana: from make.fun's escrow program when the reward is locked there, otherwise from make.fun's reward wallet, as this bounty's page says.
+
+    ## Deliverables
+    - A public GitHub repository owned by your own GitHub account, created after the competition opens, under an OSI-approved license, with main.ts (Node 22) or main.py (Python 3.13) in the repository root that writes /output/<id>.out for the case /input/<id>.in it is given
+    - The AI coding-agent transcripts of the sessions that built it (Claude Code, Codex, Cursor and others), uploaded with each submission
+
+    ## Requirements
+    - Standard library plus source you vendor into the repository: nothing is installed before the program runs, and it has no network
+    - Read the case in /input; two runs on the same case must write the same forecast
+    - At most 8 seconds, 1 CPU and 1024 MB per case
+    - At most 10 submissions a day and 20 in all; your last submission before the deadline is your final entry
+  rules: |-
+    ## The task
+    Start your agent's session at or after the competition opens (2026-11-17T06:00:00Z) and build your entry in it: a session that began before the opening cannot be entered (thinking_in_window, below). Forecast how many people watch Grand Theft Auto VI live on Twitch in each hour of its release day, 2026-11-19 (UTC), after the first. Your program, `node /bot/main.ts` (Node 22) or `python3 /bot/main.py` (Python 3.13) at the root of your repository, is run once per case: it reads that case's file at /input, everything recorded up to the end of the day's first hour, that hour's count included, and writes one forecast file to /output: for each of hours 2 to 24, five quantiles of that hour's count. It runs in a sandbox with no network, so it cannot read Twitch: it forecasts. Your score is the mean pinball loss on the log scale over every scored hour and quantile (Scoring).
+
+    ## What is counted
+    - Grand Theft Auto VI releases on 19 November 2026 on PlayStation 5 and Xbox Series X|S, single-player. No console maker publishes a player count, so the game has no public count of concurrent players. The count this contest forecasts is Twitch's own count of concurrent live viewers in the "Grand Theft Auto VI" category (Twitch game id 1867279146): the number of people watching its live streams at once, the figure Twitch's directory page shows for the category.
+    - The house reads it once a minute from Twitch's public GraphQL API (POST https://gql.twitch.tv/gql, Twitch's public web client id, the query game(id: "1867279146") { id name viewersCount broadcastersCount }), each read started at the minute's first second and tried up to 3 times inside the minute. A read is valid when Twitch answered for that game with a whole number of viewers and of channels (broadcastersCount, the live streams in the category), each 0 or more.
+    - An hour h of the release day (h = 1 to 24) runs from 2026-11-19T00:00:00Z + (h - 1) hours to the next whole hour, hour 1 from 00:00 to 01:00 UTC and hour 24 from 23:00 to 2026-11-20T00:00:00Z. The game unlocks at midnight local time, country by country (New Zealand first, at 2026-11-18T11:00:00Z; central Europe at 23:00 UTC; the UK at 00:00 UTC; the US east coast at 05:00 UTC and the west coast at 08:00 UTC), so the UTC day holds the unlock in most of the world.
+    - An hour's count (its print) is the mean of the viewers of the valid reads whose minute lies in that hour, rounded half up to a whole number of viewers, when the hour has at least 30 valid reads of its 60. An hour with fewer has no print and is not scored.
+
+    ## The case
+    - The final has one case, h00, cut at the deadline, 2026-11-19T01:00:00Z, the end of hour 1: every valid read the house recorded before it and hour 1's print. If hour 1 has fewer than 30 valid reads, its print is the mean of the valid reads it has; with none there is no answer (The answer and the recording). The house records the reads while they happen, so no one, the house included, has the answer before the hours have passed.
+    - The practice is the same shape over four past big game launches, cases p00 to p03: Marvel's Wolverine (2026-09-15), Red Dead Redemption 2 (2018-10-26), God of War Ragnarök (2022-11-09) and Marvel's Spider-Man 2 (2023-10-20), all console games that unlocked at midnight local time. Each case's day is the UTC day of that game's release date, its hour 1 the day's first hour, its history the points the historical source (SullyGnome.com's hourly Twitch category averages) has before the end of hour 1, and its answer the hourly counts of hours 2 to 24 from the same source. That source gives one average a whole hour, not 60 minute reads, so a practice hour's print is that one point: close to the final's minute mean, not the same measure. Its notes say when that game really unlocked. No case holds another case's answer: the comparables in a practice case leave out every practice launch.
+
+    ## Your input
+    - /input/<id>.in, the one case your run is given (h00, or a practice case such as p00): UTF-8 JSON, one object (schema "makefun/twitch-ccu-case/v1"):
+    - `id`; `game` (`name` "Grand Theft Auto VI" and `twitch_id` "1867279146" in the final, the launch's own in a practice case); `day_start` (the day's first instant, ISO 8601 UTC) and `checkpoint` (the end of hour 1); `levels` ([0.05,0.25,0.5,0.75,0.95]);
+    - `known`: hour 1's print, one row {`hour`: 1, `from`, `until`, `viewers`, `channels`, `reads`}; `forecast`: the 23 rows to forecast, {`hour`, `from`, `until`} for hours 2 to 24;
+    - `history`: every valid point before the checkpoint, oldest first, each {`at`, `viewers`, `channels`}: in the final the house's minute reads since its recorder started, on 2026-11-17; in a practice case the historical source's points, at its own spacing, `channels` null where it has none; `history_hourly`: the same as whole-hour means, each {`from`, `viewers`, `channels`, `reads`};
+    - `streams`: the category's top 20 live streams at the last valid read before the checkpoint, each {`login`, `viewers`, `language`, `started_at`} (null in the practice); `categories_hourly`: Twitch's top 20 categories once an hour, each {`from`, `top`: [{`name`, `viewers`, `channels`}]} (null in the practice);
+    - `comparables`: past big launches' hourly counts from 14 days before their release day to 3 days after it (SullyGnome.com's hourly averages), each {`name`, `day_start`, `unlock`, `platforms`, `source`, `hourly`: [{`from`, `viewers`, `channels`}]}: 38 in a practice case, which leaves out the four practice launches, and all 42 in the final; one of them, in every case, is the Grand Theft Auto VI category's own hourly history from its 2026-08-27 extended-look premiere to 2026-11-17; and `notes`, where the case's data comes from.
+    - /input/NOTICE.txt is beside the cases in the kit's input/: where the counts come from and how to fetch them again. Your program is run with only its case's file there, so read every `*.in` file you find, in name order, and write one output for each.
+    - Your program reads $MAKEFUN_INPUT_DIR when that is set, else /input/, and writes to $MAKEFUN_OUTPUT_DIR when that is set, else /output/: the grader's container leaves both unset, and a run on your machine sets both (Entries, below).
+
+    ## Your forecast
+    - /output/<id>.out for the case /input/<id>.in, a regular file (not a link) of at most 65,536 bytes of UTF-8 JSON: one object with exactly one key, `hours`, a list of exactly 23 rows, hours 2 to 24 each once, in any order, each exactly `{"hour": h, "q": [q05, q25, q50, q75, q95]}` with no other key: five quantiles of hour h's count at the levels 0.05, 0.25, 0.5, 0.75 and 0.95 in that order, each a finite number of viewers above 0 and at most 1,000,000,000 (fractions are fine), each at least the one before it (equal is fine).
+    - For example `{"hours":[{"hour":2,"q":[78133.6,90384.26,100000,110638.73,127985.91]}, … ,{"hour":24,"q":[30624.45,61578.43,100000,162394.53,326536.46]}]}` with 23 rows is the house baseline's forecast after a first hour of 100,000 viewers.
+    - A case whose output is missing, too large, not JSON or not of this shape, or whose run crashed or ran over its 8 seconds, is an invalid case: it is scored as if every quantile of every hour were that case's hour-1 print, and an entry with any invalid case ranks below every entry whose cases are all valid and takes no prize.
+
+    ## Scoring
+    - Every case, each of its printed hours h from 2 to 24 and each of the five levels tau is one item. Its pinball loss is 2 x max(tau x d, (tau - 1) x d), where d = ln(y) - ln(q), y is the hour's print and q your quantile at tau for it: a quantile below the count costs 2 x tau per unit of log it is short, one above it 2 x (1 - tau) per unit it is over, so the 5% quantile should sit where the count is below it one hour in twenty. The log scale makes a miss of 20% cost the same at 10,000 viewers as at 1,000,000. A print below 1 viewer counts as 1 (the log of 0 is no number).
+    - Loss (the rank): the mean pinball loss over every item of every case, written to 6 decimals; lower is better and 0 is the best. A forecast whose five quantiles are equal scores exactly its mean absolute log error, the mean of |ln(y) - ln(q)|, so the most accurate forecast and an honest spread are scored on one scale. The board ranks on those 6 decimals; its public rows round it to 3 significant figures, and your own entries' rows, the result document and the archive keep it exact. Every rank, tie and prize is decided on the exact value.
+    - The board also shows the typical miss (100 x (exp(m) - 1), in percent, where m is the mean over every scored hour of |ln(y) - ln(your median)|), the 90% coverage (the share of scored hours with your 5% quantile at or below the print and your 95% quantile at or above it; an honest forecast covers about 0.9) and valid (1 when every case is valid, else 0). They are information: only the loss ranks.
+    - A worked example: say a case scores two hours and the forecast's rows for them are both [600000, 800000, 900000, 1100000, 1500000]. The first hour's print is 1,000,000: the five items cost 0.051083, 0.111572, 0.105361, 0.047655 and 0.040547. The second's is 700,000: 0.015415, 0.200297, 0.251314, 0.225993 and 0.076214. The loss is the mean of the ten, 0.112545; the typical miss 19.52%; the 90% coverage 1 (both prints inside the 5% to 95% band). Had that case been invalid with an hour-1 print of 1,200,000, every quantile would be 1,200,000 and its loss the mean absolute log error, (0.182322 + 0.538997) / 2 = 0.360659.
+    - Exactly equal losses are ordered by the run time, faster first: the grader's own measurement of the wall time your program takes over all of a phase's cases, averaged over its two executions, in whole milliseconds (run_ms), on the same 1-CPU sandbox every entry runs in; exactly equal run times go to the earlier receipt. It only breaks an exact tie and is never part of the loss.
+    - The pinball loss is a proper scoring rule for quantiles: you score best on average by writing the quantiles you really believe. A forecast that is too narrow pays for every hour outside it, one too wide pays at every hour, and one whose median sits where the count is not pays at both.
+
+    ## The answer and the recording
+    - The answer is the prints of hours 2 to 24 of 2026-11-19 (UTC), from the reads the house recorder records. It reads the category once a minute from before the opening until 2026-11-20T00:10:00Z, in two places, a primary and a backup: for each minute the primary's read counts, and a minute the primary missed is filled from the backup's.
+    - An hour with fewer than 30 valid reads has no print and is not scored. The final needs at least 12 of the 23 hours printed: with fewer, or with no valid read in hour 1, there is no answer, the final is not graded and no prize is paid (Payout).
+    - Once the day is recorded, the house freezes the recording into the final dataset, which is attached to the final phase and published with the results: the case every entry read and every print, so anyone can score every final entry again on the same counts.
+    - Before the deadline the practice cases are scored the same way against the historical source's counts. The practice is graded on past launches anyone can look up and pays nothing, so a practice score is no guide to the final.
+
+    ## The race
+    - After the deadline the final runs as a race you can watch. At the deadline the house runs every racing entry once on h00, cut from the live recording, and keeps its forecast; then at the end of each hour from 2026-11-19T02:00:00Z to 2026-11-20T00:00:00Z it scores the hour just ended against that hour's print, with the loss above, and the race's chart and standings show each racer's loss over the hours scored so far.
+    - Up to 256 final entries race, seated by their practice rank, the house entries among them. The race's marks are provisional and decide nothing: the result is the official grade of every final entry on the frozen recording, the same prints, once the final phase grades it.
+
+    ## Baseline and prizes
+    - The house baseline (starter/main.ts in the kit) says every hour stays at the first hour's count, with a spread that widens over the day: for hour h = 2 to 24, q_tau = p x exp(z_tau x 0.15 x sqrt(h - 1)), rounded to 2 decimals, where p is hour 1's print (1 if it is below 1) and z_tau the standard normal's quantile at each level (-1.645, -0.674, 0, 0.674, 1.645). After a first hour of 100,000 viewers its hour-2 row runs from 78,133.6 to 127,985.91 around 100,000, and its hour-24 row from 30,624.45 to 326,536.46. Its numbers were fixed in advance, never tuned on the practice. On the practice it scores a loss of about 0.387 (typical miss about 82.8%, 90% coverage about 0.783, every case valid); the kit's starter, the same program, scores the same. It is graded on the final like every entry.
+    - The house model forecast: the house also enters the forecast of an AI model (superbot, at reasoning effort max, with a 64,000-token output budget), made by one recorded call the house pays for (asked once more, the same prompt, only if its first answer is not a valid forecast), given these rules, the forecast's format and the case's data. It answers, for each case and each of hours 2 to 24, a median ratio r_h to the case's hour-1 print and a log spread s_h. Its answer is recorded, and every grading replays it with no new call: q_tau = p x r_h x exp(z_tau x s_h), p the case's hour-1 print. It is made once for the practice, over the practice cases, and once for the final, at 2026-11-18T23:00:00Z, two hours before the deadline, on the history recorded to then, before hour 1 has begun: its ratios are to hour 1's print, whatever it turns out to be, and they are replayed on h00.
+    - Twenty places pay $250 in USDC: $50 for 1st place, $35 for 2nd, $25 for 3rd, $10 each for 4th to 10th and $7 each for 11th to 20th, one place per entrant. Places go by loss, lowest first, so 1st place is the best forecast that beats the best house entry. Beating the best house entry makes a forecast eligible, not a winner: when more than twenty forecasts beat it, only the twenty with the lowest losses take places. A prize needs a loss strictly below the best house entry's on the final: the house baseline's or the house model forecast's, whichever is lower (the house baseline's alone if the house model forecast was not entered), and every case valid. An entry at or above it keeps its rank but takes no place, and the next entry below it takes the place. The house baseline and the house model forecast rank on the leaderboard and take no place, since the bar is the lower of their losses and neither is below it; any other entry make.fun enters itself ranks like any other entry and must beat them too. A house bot that finishes in a paid place holds that place, and that place's prize is not awarded; no entry moves up to take it. A place no entry is left to take is not awarded. Exactly equal losses go to the faster program, then the earlier receipt.
+
+    ## Transcripts
+    Every submission must include the transcripts of the AI coding-agent sessions that built it (the session logs Claude Code, Codex, Cursor or another agent harness writes while it runs), as a makefun bundle or as loose files, up to 200 MB. A session file exported afterwards (a SpecStory export, or a chat log your agent writes out) must carry the model provider's usage on its assistant messages and name the harness that wrote it; one your agent hands over because its tool keeps no session record (a session file it exported itself carrying "handed_over") need not carry usage, and its entry is ranked but takes no paid place; a ChatGPT or Claude account export carries no usage and is not accepted. Secrets are redacted on the server. The transcripts are matched against the code for authorship and priced for build cost. Code written by hand is allowed; it lowers authored coverage.
+
+    ## Transcript gate
+    Before an entry is graded, its transcripts pass a gate of ten pass/fail checks. The gate is never a score, and it has no AI judge and no AI-text detection: no check reads what a thinking block says, so a session whose thinking the provider summarised or left out passes on what the agent did. An entry that fails any check is rejected: it is not graded and takes no prize, and its status names each failed check with its fix, so you can fix it and submit again before the deadline.
+    - transcripts_present: at least one session is parsed from the upload.
+    - transcripts_recorded: every session is a log a harness recorded or a file exported from its record; a session your agent hands over because its tool keeps no session record (a session file it exported itself carrying "handed_over", one line saying why) makes this check skip as a note naming it, never a rejection, and the entry's build cost is labelled Handed over; under handed_over_places none: An entry with a handed-over session is ranked where it scores but takes no paid place: to compete for rewards, tell the person you work for to run you in a client whose sessions are recorded. If you cannot hand over what you can see, use Superbot (https://superbot.gg), a free client: run on your own computer, it keeps sessions that bundle reads.
+    - thinking_wellformed: every user, assistant and tool message of a session carries a timestamp (a handed-over session's messages may carry none, and the times they carry are held to the rest), no assistant or tool message falls more than 60 s behind the latest before it, and every tool result answers one earlier tool call of its session; a session file your agent exported itself names the harness that wrote it, in the file or with bundle's --harness.
+    - thinking_in_window: every transcript timestamp lies between the competition's opening and the entry's receipt time, give or take 60 s of clock skew.
+    - thinking_reproduces: at least 30% of the counted lines are authored, first carried by a write or edit of the agent's own in the transcripts; a line that first appears in a human's message (pasted), in a tool result or a file read back (read) or nowhere in them (absent), and a line the agent re-typed, renamed or reformatted from code a tool result or a message showed it first (copied: code cloned, downloaded, copied or pasted in), count against the share, and the lines of the kit's starter, as handed out or re-typed from it, are left out of the counted lines; at most 40% of the counted lines of text files are unwritten: absent, or read in a file an import command the agent ran brought in (git clone, curl or wget to a file, cp from outside the repository, an archive unpacked, a project generator), which fails only once 10 or more lines are; and the entrypoint (main.ts or main.py) has at least one authored line; a packed entrypoint the kit's makefun compress wrote counts as the source it was packed from, which bundle uploads beside the sessions, when makefun compress makes the entrypoint from that source byte for byte and the sessions show the agent writing the source and then running makefun compress on it later than the latest message in which one of the source's authored lines first appears (an edit that only deletes or re-types lines is no write), shown by the agent's own command running makefun compress on the source or by the line makefun compress prints, in a tool result or any other message; the source's lines then count toward the share as any counted file's do, a line repeated in it counted once.
+    - thinking_turns: at least 5 assistant turns carry text or thinking (a turn that only calls tools does not count).
+    - thinking_priced: every usage record prices to a known model, or to $0 where the record's session ran its model on your own machine (a local runtime or loopback server the session records, never a model's name or a self-export's stated provider), for this check alone, never the entry's build cost; a self-reported session (a file exported afterwards, not a log a known harness wrote; a file in Claude Code's or Muse Code's session format without the token usage those harnesses record on every response, or in Claude Code's without its version, is one) carries the provider's usage on at least 50% of its assistant messages, with the provider's own token counts, not rounded, estimated or repeated figures (a provider's input count grows as the conversation does, so one pair of counts does not keep coming back), and its output is no more than a model produces in the time its own timestamps span (500 tokens a second); a handed-over session need not carry usage, but the usage it does carry is held to the same rules; an upload of harness-recorded logs with no usage has nothing to price; an entry whose sessions are the Muse app's own session files carries its agent's token usage as Muse recorded it (at least one usage row across them), attached with bundle's --muse-usage.
+    - thinking_revised: some file (the entrypoint, or the code it runs) takes its final content from at least 2 assistant messages that write or edit it (a file written once in full and never revised counts 1).
+    - thinking_fresh: for an entry uploaded as a source bundle, every credited line comes from agent sessions that show the anchor line the kit's init prints (makefun anchor <root sha> round <round>) in a tool result before their first counted write (a Claude subagent launched after its parent's quote, or a Codex fork of a session that quoted it, counts with it); short of that the check skips as a note: the entry is not rejected, and its reward, if it places, is paid as any other. A quote timestamped before the round fails.
+    - transcripts_run_record: an entry received from 17 November 2026 (00:00 UTC) carries a run record (bundle writes it into the bundle; a loose upload adds makefun-run.json) and is rejected without one, or with one its upload contradicts: its prompt is the person's own opening prompt, never blank, a template left unfilled or an agent's or a harness's hand-off, and one marked typed is the first message of an uploaded top-level session, while any other names what started the run; the harness, its version, the provider, the model and the effort are each declared or recorded by every top-level session (a model id that names its provider, such as claude-*, gives the provider; --effort default names the harness's own effort, and --effort none a real level); a system prompt marked uploaded comes as a system-prompt file, one marked in-session is carried by a session, and one withheld says why; every MCP server a session used (an mcp__<server>__<tool> tool it called, or a server its log lists) is listed by its name, and none is marked builtin unless a harness the sessions ran under ships it (Claude Code's ide, claude-in-chrome, workspace, computer-use, Claude Preview and Claude Browser, Claude Desktop's ccd_turn, Cosmos's cosmos and Codex's codex_apps); and the instruction files it states are collected only where the upload carries one, none only where it carries none, and withheld with a reason. An entry received before then with no run record skips as a note, and a run record it does carry is checked the same way.
+
+    ## Entries
+    - Node 22 (node /bot/main.ts) or Python 3.13 (python3 /bot/main.py): one of the two at the repository's root, not both. Source and the standard library only, nothing installed, no network.
+    - Your program is run once per case, each run in a sandbox of its own with only that case's file in /input: at most 8 seconds, 1 CPU, 1024 MB and 64 processes per run. /bot, your repository, is read-only; /output is where your forecast goes. Each phase's cases are run twice and the two forecasts of each case must be the same byte for byte, so seed any randomness. An entry whose two executions of any case differ is scored from the first and is not ranked.
+    - A practice grade runs your program twice on each practice case, each run starting a sandbox of its own: about 2 seconds a start when few entries are being graded, 8 to 11 seconds at full load (up to 20 at the 90th percentile), so on production a practice grade takes about 10 seconds a run when quiet and 15 to 20 seconds a run at full load, plus about 10 seconds.
+    - The kit's starter/ is the house baseline laid out as an entry, with an MIT LICENSE: run it locally on the practice with `mkdir -p out && MAKEFUN_INPUT_DIR=input MAKEFUN_OUTPUT_DIR=out node starter/main.ts` from the kit's directory (starter/main.py is the same program in Python).
+    - Entries are taken from the opening at 2026-11-17T06:00:00Z to the deadline at 2026-11-19T01:00:00Z. At most 10 submissions a day and 20 in all; your last submission before the deadline is your final entry. Every entry needs the transcripts of the agent sessions that built it.
+    - The entry signature: a wallet linked to your account signs the entry message (make.fun entry v1), which names this site, the competition, the repository, the commit, the sha256 of the transcripts uploaded with it, the wallet, a fresh nonce and the time it was issued. A signed message is good for 10 minutes and enters one submission only. When the reward is locked in make.fun's escrow program on Solana, every entry is signed by a Solana wallet linked to your account, and a prize the entry wins is claimed from the escrow to that wallet (see Payout). Otherwise the reward is paid from make.fun's reward wallet and an entry needs no signature: a prize is claimed with the payout details alone, and an entry may still carry the signature. This bounty's page says which.
+    - The repository and commit of an entry are shown only to its entrant and the organisers, before the deadline and after it.
+    - Your repository is public on GitHub from the moment you create it, so anyone can read your code and see which GitHub account owns it, even though this site shows it only to you and the organisers.
+
+    ## Payout
+    The final leaderboard is published within 7 days of the deadline, unless a check holds it: the results come once the release day has been recorded and graded. Once the final dataset the house froze from its recording is attached, every final entry is graded on it, the runs that would be paid are graded again and the entries are scanned for copies, and the results are published and resolved with no further admin step. The prizes are paid in USDC on Solana only (no bank wire), in one of two ways, and this bounty's page says which. When the bounty opens, its whole reward is locked in make.fun's escrow program on Solana if the escrow can be funded. When the reward is locked in the escrow, every entry is signed by a Solana wallet linked to the entrant's account (see Entries), and once the result is posted each winner claims the prize from the escrow to the wallet that signed the winning entry, the claim screened against the sanctions list; a prize that nobody wins or claims goes back to make.fun's reward wallet after the escrow's claim window.
+
+    Otherwise the reward is paid from make.fun's reward wallet as follows, and an entry needs no signature. Once the results are resolved, each winner claims the prize within 7 days with the payout details: a Solana address to pay it to and the winner agreement. A legal name, the country of residence and a tax form (a W-9 for a US person, a W-8BEN for anyone else) are asked only when the winner's prizes from make.fun in the calendar year, this prize included, reach the $2,000 tax reporting threshold; below it, the claim asks for none of them. The claim is screened against the sanctions list, then the house pays it from make.fun's reward wallet in USDC on Solana: at once when the address is a wallet linked to the winner's account by signature and the automatic checks clear it, otherwise once the organisers have screened it. A prize not claimed within 7 days passes to the next entry in the standings. A prize that no entry takes or claims (a place no prize-eligible entry is left to take, or one passed down the standings until no eligible entry is left) is never paid out: its money stays in make.fun's reward wallet for later contests.
+
+    If there is no answer (The answer and the recording), no result is posted and no prize is paid, whichever way the reward was to be paid: a reward locked in the escrow goes back to make.fun's reward wallet once the escrow's resolve window, 14 days after the final phase ends, has passed with no result posted.
+
+    Every prize is paid gross, subject to statutory withholding; any tax due on it is the winner's own.
+
+    Open to individuals 18 or older (or the age of majority where they live), except residents of comprehensively sanctioned countries, anyone on a sanctions list, and where prohibited by law.
+  resolution:
+    method: automated
+    summary: "Every final entry forecasts, from Twitch's viewer count of Grand Theft Auto VI recorded up to the end of the first hour of its release day, 2026-11-19 (UTC), that count in each of the other 23 hours as five quantiles, and ranks by its mean pinball loss on the log scale over every printed hour and quantile, lowest first: 1st place goes to the best forecast. Beating the best house entry only qualifies a forecast; the 20 lowest-loss forecasts that beat it take the 20 places, one per entrant, an entry that beats the house but ranks below 20th wins nothing, and a paid place a house bot holds is not awarded. The lowest loss wins a $50 reward, twenty places paying $250 in all."
+    criteria:
+      - "Harness: program/v1, run once per case; the entry runs offline on each case's /input/<id>.in alone and writes /output/<id>.out, each case twice with the outputs compared, at most 8 seconds a run, and the sealed scorer scores every case against the recorded prints"
+      - "Count: Twitch's concurrent live viewers in the Grand Theft Auto VI category (game 1867279146), read by the house recorder once a minute from Twitch's public GraphQL API; an hour's print is the mean of its valid minute reads, rounded half up, when it has at least 30 of its 60"
+      - "Case: one final case, h00, at the deadline 2026-11-19T01:00:00Z, the end of the release day's first UTC hour, holding every valid read before it and hour 1's print; it forecasts hours 2 to 24 of 2026-11-19 (UTC); an hour with no print is not scored, and with fewer than 12 printed, or none in hour 1, there is no answer and no prize"
+      - "Rank: the mean over every printed hour and level 0.05, 0.25, 0.5, 0.75 and 0.95 of 2 x max(tau x d, (tau - 1) x d), d = ln y - ln q, to 6 decimals, lowest first, so equal quantiles score their mean absolute log error; an invalid case is scored as every quantile at its hour-1 print and takes the entry out of the prizes; ties by the faster run time (run_ms), then the earlier receipt"
+      - "Race: after the deadline the final runs as a live race, each hour scored as its print comes in; its marks are provisional and decide nothing, and the result is the official grade on the frozen recording"
+      - "Prizes: $50 for 1st place, $35 for 2nd, $25 for 3rd, $10 each for 4th to 10th and $7 each for 11th to 20th, one place per entrant, paid by the house in USDC on Solana; a paid place a house bot holds is not awarded, and no entry moves up to take it"
+      - "Beat the house: a prize needs a loss strictly below the best house entry's on the final, the house persistence baseline's or the house model forecast's; an entry that does not beat it keeps its rank and takes no place, and a place no entry is left to take is not awarded"
+      - "Payout: in USDC on Solana only, and the bounty's page says which way: when the reward is locked in make.fun's escrow program on Solana, every entry is signed by a Solana wallet linked to the entrant's account and each winner claims the prize from the escrow to that wallet once the result is posted, a prize nobody wins or claims going back to make.fun's reward wallet after the claim window; otherwise an entry needs no signature, each winner claims within 7 days (a legal name, country and tax form only once the winner's prizes from make.fun reach $2,000 in the calendar year), the claim is screened against the sanctions list and paid from make.fun's reward wallet, at once to a wallet linked by signature when the automatic checks clear it, an unclaimed prize passes to the next entry in the standings, and a prize nobody takes or claims stays in make.fun's reward wallet for later contests"
+      - "Reproducible: the final dataset (the case every entry read and every print) is published with the results, so anyone can run and score every final entry again on the same counts"
+    source: Twitch's count of concurrent live viewers in the Grand Theft Auto VI category, read once a minute by the house recorder from Twitch's public GraphQL API, through the release day 2026-11-19 (UTC)
+    verifier: make.fun grader runs every final entry twice on the case of the frozen final dataset and scores it with the sealed scorer; the results are published and resolved automatically once the final grades, the regrades of the would-be winners and the scan for copies are done
+    tie_break: Equal losses go to the faster program (the lower run time, run_ms), then to the earlier receipt
+    announce: Final leaderboard within 7 days of the deadline unless a check holds it, once the release day is recorded and graded; in USDC on Solana, winners claim from make.fun's escrow program once the result is posted when the reward is locked there, otherwise within 7 days from make.fun's reward wallet
+    metric:
+      name: Pinball loss on the log scale
+      unit: nats
+      better: lower
+
+# The three sealed trees' digests (scripts/new-bounty-preflight.ts, server/competitions/load.ts treeSha256): scorer/ as
+# built, input/ and reference/ as the practice cut wrote them (collector/twitch-ccu/dataset.ts practice).
+harness:
+  kind: program/v1
+  runtimes: [node22, python3.13]
+  input_data: input
+  cases: per-file
+  scorer:
+    runtime: node22
+    entrypoint: scorer/score.ts
+    reference_data: reference
+  scorer_sha256: 2962f1ffc5c714765292525a29644557dafd552da840a19efaeebbb7965d9d07
+  input_sha256: 886ff7e8f3ed403516ed91198abd7ebed79f7a57cf24d0bc1c33d6db2d22e98d
+  reference_sha256: 3eab567d96c1ea682f37139d0baedba435f7b28f3e9673bd41e4f6ba5720c116
+  gate: valid
+  final_dataset: true
+
+phases:
+  - key: dev
+    title: Practice forecast
+    description: Every entry forecasts the practice cases, the release days of four past big game launches, each from its history up to the end of its first hour and that hour's count, and is scored on the counts of its hours 2 to 24; its score shows as it lands.
+    starts_at: "2026-11-17T06:00:00Z"
+    ends_at: "2026-11-19T01:00:00Z"
+    scores: live
+  - key: final
+    title: GTA VI's release day
+    description: Every final entry forecasts the one case the house cut at the deadline, everything recorded before the end of the release day's first hour and that hour's count, and is scored on the counts of hours 2 to 24 as the house recorded them; it races live hour by hour, and its official scores appear with the results.
+    starts_at: "2026-11-20T00:00:00Z"
+    ends_at: "2026-11-20T06:00:00Z"
+    scores: after_finalize
+
+# The loss ranks (6 decimals, public rows to 3 significant figures: the catalogue rounds every paid rank column,
+# tests/unit/catalogue.test.ts; the rules say so); typical_miss_pct and coverage_90 are information; valid is the gate
+# (harness.gate): an entry with an invalid case ranks below every valid one; run_ms, the grader's run time per
+# execution over every case (/scores/run.json wall_ms, which the scorer copies), breaks an exact tie (tie_break_index).
+leaderboard:
+  title: Results
+  primary_index: 0
+  tie_break_index: 4
+  columns:
+    - {key: loss, title: "Pinball loss (log scale)", index: 0, sorting: asc, precision: 6, significant_figures: 3}
+    - {key: typical_miss_pct, title: "Typical miss (%)", index: 1, sorting: asc, precision: 2}
+    - {key: coverage_90, title: "90% coverage (nominal 0.9)", index: 2, sorting: desc, precision: 4}
+    - {key: valid, title: Every case valid, index: 3, sorting: desc, precision: 0}
+    - {key: run_ms, title: "Program run time (ms)", index: 4, sorting: asc, precision: 0}
+
+submission_rule:
+  rule: Force_Last
+  max_per_day: 10
+  max_total: 20
+  transcripts_required: true
+  strategy_note_required: false
+  license: osi
+  repo_created_after_open: true
+  house_only: false
+  authorship: 12
+
+# One row per place, as the catalogue's tables list them (tests/unit/catalogue.test.ts TWENTY_PLACE_TABLE, prizesOf):
+# $250 over 20 places.
+prizes:
+  - {kind: placement, place: 1, amount_usd: 50, title: 1st place}
+  - {kind: placement, place: 2, amount_usd: 35, title: 2nd place}
+  - {kind: placement, place: 3, amount_usd: 25, title: 3rd place}
+  - {kind: placement, place: 4, amount_usd: 10, title: 4th place}
+  - {kind: placement, place: 5, amount_usd: 10, title: 5th place}
+  - {kind: placement, place: 6, amount_usd: 10, title: 6th place}
+  - {kind: placement, place: 7, amount_usd: 10, title: 7th place}
+  - {kind: placement, place: 8, amount_usd: 10, title: 8th place}
+  - {kind: placement, place: 9, amount_usd: 10, title: 9th place}
+  - {kind: placement, place: 10, amount_usd: 10, title: 10th place}
+  - {kind: placement, place: 11, amount_usd: 7, title: 11th place}
+  - {kind: placement, place: 12, amount_usd: 7, title: 12th place}
+  - {kind: placement, place: 13, amount_usd: 7, title: 13th place}
+  - {kind: placement, place: 14, amount_usd: 7, title: 14th place}
+  - {kind: placement, place: 15, amount_usd: 7, title: 15th place}
+  - {kind: placement, place: 16, amount_usd: 7, title: 16th place}
+  - {kind: placement, place: 17, amount_usd: 7, title: 17th place}
+  - {kind: placement, place: 18, amount_usd: 7, title: 18th place}
+  - {kind: placement, place: 19, amount_usd: 7, title: 19th place}
+  - {kind: placement, place: 20, amount_usd: 7, title: 20th place}
+
+# limits.wall_budget_sec is not a run's limit here: each case's run is capped by reference/manifest.json's time_cap_ms
+# (8,000). It states the practice's per-execution cost for the grading budget, its 4 cases x (8 s + about 10 s pod
+# start) = 72 s, above the final's one case, 18 s (the header's Grading budget and load).
+limits:
+  cpus: 1
+  memory_mb: 1024
+  pids: 64
+  wall_budget_sec: 72
+
+min_authored_coverage: 0.8
+
+prize_requires_beating_baseline: true
+
+# A house entry that beats the gate holds the place it finishes in, unpaid, and no entry moves up (the gate's two
+# baselines never beat the better of them, so neither holds one); the rules say so.
+house_holds_places: true
+
+automation:
+  lifecycle: true
+  payouts: auto
+  escrow: at_open

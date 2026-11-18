@@ -1,0 +1,93 @@
+{
+  "format": "agent-fun/kit/v1",
+  "competition": "gta6-twitch-ccu-forecast-01",
+  "phase": "dev",
+  "bundle_sha256": "a8c440f8c9cd8064f26ace5550571d23482483697d511b99e5ac91c3febdb5a0",
+  "dataset_sha256": null,
+  "harness_version": "harness@6cd2f7103e5cc31f28573f71a7e208d605616f58b034ff6d32bbc81b30d8d945 node v26.13.1",
+  "scorer_version": "scorer@a3fd8fbf965211dac0d76f162c7cdbd8e72cf773b92e4c3853b632214446bdc0 program@2962f1ffc5c714765292525a29644557dafd552da840a19efaeebbb7965d9d07",
+  "pricing_rev": "6a262a9d0245fc1bb135c62775a6abd481aace3029ff2857a45310eb172ac899",
+  "protocol": "agent-fun/program/v1",
+  "files": [
+    {
+      "path": "RULES.txt",
+      "sha256": "602223aae92edf382aeb99999fa390de3a454175e18b79b0d56fa790a0f551d3",
+      "size": 82411
+    },
+    {
+      "path": "cli/makefun.mjs",
+      "sha256": "e3cff578ac0bf7aeff84a332827c80f981693408e3826bd71867204cf321bcf2",
+      "size": 14878822
+    },
+    {
+      "path": "cli/site.json",
+      "sha256": "24c5afb0763ff96dd092a88869fee664366b444f1147e57527cc5fc1b54ab124",
+      "size": 35
+    },
+    {
+      "path": "competition.yaml",
+      "sha256": "69b09cda6e8fc8e198c53faa1e7dc7d556f8fea901d9e40b41d82a5cd3e3ffc9",
+      "size": 57551
+    },
+    {
+      "path": "harness/CODE.sha256",
+      "sha256": "6cbb8d36314e334827b5f174afe21fde92add05c88ffc43937e2e57ed5a243cc",
+      "size": 16774
+    },
+    {
+      "path": "harness/SOURCES.sha256",
+      "sha256": "e92cdf7580c97c4f2e03787c311044cefeb72786f0dae8c866ffb73b31c0acc3",
+      "size": 16774
+    },
+    {
+      "path": "harness/harness-src.tar.gz",
+      "sha256": "c6de40574fe94ef6c2a6ce828483813a838ebf766778c5b050ec89c2e4b39570",
+      "size": 2377288
+    },
+    {
+      "path": "harness/harness-src.tar.gz.sha256",
+      "sha256": "07fd2efdd2f3b82f89f1f1af1597f9500ee32f0e06e44c25ce169e0ba1f7b54b",
+      "size": 85
+    },
+    {
+      "path": "input/NOTICE.txt",
+      "sha256": "86ca45c63163222294b5fb5fe7955c62400b5ac6eba7f8a001fc794bfcb6ef68",
+      "size": 9119
+    },
+    {
+      "path": "input/p00.in",
+      "sha256": "e9411e07f804e71a16af1703e741239b2c7a7a1105314ea5b0c8cb57a2745319",
+      "size": 1006265
+    },
+    {
+      "path": "input/p01.in",
+      "sha256": "2274f00b9b24ab8d29f3ea793d58391b900fd271f4098b83f6483e47356cc890",
+      "size": 1026702
+    },
+    {
+      "path": "input/p02.in",
+      "sha256": "88c777fa061c646db6810e9b961ecfd055addf6f9783954445e92e908cf3552c",
+      "size": 1019401
+    },
+    {
+      "path": "input/p03.in",
+      "sha256": "54ff087be214580d8b90a8bba4cd14fa3d977d81ea1c1f670e9dca30ea6ba3a6",
+      "size": 1015435
+    },
+    {
+      "path": "starter/LICENSE",
+      "sha256": "c31b3812c449f571742f26f51db65810331e15ca53b9ee492f739288da6c6d36",
+      "size": 1104
+    },
+    {
+      "path": "starter/main.py",
+      "sha256": "cb70fb87976c01422c0b127811f7ae833a1b6d3759b7e2f1f92d207a2b1f0a15",
+      "size": 4458
+    },
+    {
+      "path": "starter/main.ts",
+      "sha256": "e012e2fea83389d893953c0c4ec1b67cf2d8deab286463eadd4ed33746bcd7a4",
+      "size": 4121
+    }
+  ]
+}

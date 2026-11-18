@@ -1,0 +1,127 @@
+Where these viewer counts come from
+
+Data: SullyGnome.com (https://sullygnome.com), hourly Twitch category averages.
+
+The practice cases (p00..p03) and every case's comparables are past game launches' Twitch categories as SullyGnome
+publishes them: per hour, the category's average concurrent viewers and its average number of live channels. A point
+at `at` covers the hour [at, at + 1 h) in UTC; an hour SullyGnome did not sample has no point (a small category is
+sampled only about every 12 hours, so its quiet days are sparse). Nothing is interpolated. The points were read once,
+on 2026-11-17, from the JSON behind each game's page (one calendar month a request):
+
+  GET https://sullygnome.com/api/charts/linecharts/getconfig/GameViewers/30/0/<sullygnome id>/<name>/%20/%20/<YYYY>/<M>/%20/0/
+  GET https://sullygnome.com/api/charts/linecharts/getconfig/GameChannels/30/0/<sullygnome id>/<name>/%20/%20/<YYYY>/<M>/%20/0/
+
+(the "Average viewers" and "Channels" datasets), for the release date minus 14 days to the release date plus 3 days;
+for Grand Theft Auto VI's own category, every point from its first (2026-08-27T17:00Z) to 2026-11-17T02:00Z. Each
+Twitch category id was checked against Twitch's own directory (https://gql.twitch.tv/gql, game(id) and game(name))
+on 2026-11-17.
+
+Terms: SullyGnome publishes no open licence; its footer reads "SullyGnome.com © is in no way affiliated with Twitch.
+Please do not scrape this site, it's a hobby project with limited resources." The figures are factual counts of
+Twitch's public directory, quoted here with attribution to SullyGnome. Please do not bulk-download the site to extend
+them; the pages below show each curve.
+
+A practice case is a launch's UTC release day: its day_start is 00:00 UTC of the release date, its checkpoint one hour
+later, its known hour 1 the mean of the launch's points in the first hour, and its history the launch's points from 14
+days before the release date up to the checkpoint. Its notes give the launch's real unlock, which is rarely midnight
+UTC. An hour's figure here is SullyGnome's hourly average (one point an hour), not the mean of 60 minute reads.
+
+The practice launches:
+  Marvel's Wolverine (Twitch category 75101830, SullyGnome 117671, released 2026-09-15)
+    https://sullygnome.com/game/Marvel's_Wolverine
+  Red Dead Redemption 2 (Twitch category 493959, SullyGnome 28264, released 2018-10-26)
+    https://sullygnome.com/game/Red_Dead_Redemption_2
+  God of War Ragnarök (Twitch category 102007682, SullyGnome 65645, released 2022-11-09)
+    https://sullygnome.com/game/God_of_War_Ragnar%C3%B6k
+  Marvel's Spider-Man 2 (Twitch category 1967084783, SullyGnome 97296, released 2023-10-20)
+    https://sullygnome.com/game/Marvel's_Spider-Man_2
+
+The comparables (every case's "comparables"; a practice case leaves out the four practice launches, the final holds
+them all):
+  ELDEN RING (Twitch category 512953, SullyGnome 51351, released 2022-02-25)
+    https://sullygnome.com/game/ELDEN_RING
+  Resident Evil Requiem (Twitch category 1597660489, SullyGnome 194575, released 2026-02-27)
+    https://sullygnome.com/game/Resident_Evil_Requiem
+  Hogwarts Legacy (Twitch category 1095275650, SullyGnome 69414, released 2023-02-10)
+    https://sullygnome.com/game/Hogwarts_Legacy
+  Cyberpunk 2077 (Twitch category 65876, SullyGnome 11060, released 2020-12-10)
+    https://sullygnome.com/game/Cyberpunk_2077
+  Ghost of Yōtei (Twitch category 362339131, SullyGnome 178714, released 2025-10-02)
+    https://sullygnome.com/game/Ghost_of_Y%C5%8Dtei
+  Monster Hunter Wilds (Twitch category 1286077738, SullyGnome 155985, released 2025-02-28)
+    https://sullygnome.com/game/Monster_Hunter_Wilds
+  Black Myth: Wukong (Twitch category 519291, SullyGnome 60157, released 2024-08-20)
+    https://sullygnome.com/game/Black_Myth%3A_Wukong
+  Hollow Knight: Silksong (Twitch category 511391, SullyGnome 49110, released 2025-09-04)
+    https://sullygnome.com/game/Hollow_Knight%3A_Silksong
+  Battlefield 6 (Twitch category 168648543, SullyGnome 178291, released 2025-10-10)
+    https://sullygnome.com/game/Battlefield_6
+  Call of Duty: Black Ops 6 (Twitch category 1672324422, SullyGnome 168257, released 2024-10-25)
+    https://sullygnome.com/game/Call_of_Duty%3A_Black_Ops_6
+  Call of Duty: Modern Warfare III (Twitch category 1337444628, SullyGnome 147117, released 2023-11-10)
+    https://sullygnome.com/game/Call_of_Duty%3A_Modern_Warfare_III
+  Call of Duty: Black Ops 7 (Twitch category 2012789438, SullyGnome 194728, released 2025-11-14)
+    https://sullygnome.com/game/Call_of_Duty%3A_Black_Ops_7
+  Call of Duty: Modern Warfare 4 (Twitch category 1478650472, SullyGnome 222544, released 2026-10-23)
+    https://sullygnome.com/game/Call_of_Duty%3A_Modern_Warfare_4
+  007 First Light (Twitch category 229772247, SullyGnome 148814, released 2026-05-27)
+    https://sullygnome.com/game/007_First_Light
+  Forza Horizon 6 (Twitch category 1991115310, SullyGnome 203372, released 2026-05-19)
+    https://sullygnome.com/game/Forza_Horizon_6
+  Marathon (Twitch category 407314011, SullyGnome 189645, released 2026-03-05)
+    https://sullygnome.com/game/Marathon
+  Saros (Twitch category 30651912, SullyGnome 185981, released 2026-04-30)
+    https://sullygnome.com/game/Saros
+  The Legend of Zelda: Tears of the Kingdom (Twitch category 512998, SullyGnome 51469, released 2023-05-12)
+    https://sullygnome.com/game/The_Legend_of_Zelda%3A_Tears_of_the_Kingdom
+  Starfield (Twitch category 506438, SullyGnome 58933, released 2023-09-06)
+    https://sullygnome.com/game/Starfield
+  Baldur's Gate 3 (Twitch category 512923, SullyGnome 51383, released 2023-08-03)
+    https://sullygnome.com/game/Baldur's_Gate_3
+  Diablo IV (Twitch category 515024, SullyGnome 54136, released 2023-06-06)
+    https://sullygnome.com/game/Diablo_IV
+  Borderlands 4 (Twitch category 1846512643, SullyGnome 174607, released 2025-09-12)
+    https://sullygnome.com/game/Borderlands_4
+  Kingdom Come: Deliverance II (Twitch category 344035090, SullyGnome 165842, released 2025-02-04)
+    https://sullygnome.com/game/Kingdom_Come%3A_Deliverance_II
+  Assassin's Creed Shadows (Twitch category 960705568, SullyGnome 167720, released 2025-03-20)
+    https://sullygnome.com/game/Assassin's_Creed_Shadows
+  DOOM: The Dark Ages (Twitch category 936822813, SullyGnome 170049, released 2025-05-15)
+    https://sullygnome.com/game/DOOM%3A_The_Dark_Ages
+  Elden Ring Nightreign (Twitch category 982348888, SullyGnome 181917, released 2025-05-30)
+    https://sullygnome.com/game/Elden_Ring_Nightreign
+  Clair Obscur: Expedition 33 (Twitch category 36799602, SullyGnome 169958, released 2025-04-24)
+    https://sullygnome.com/game/Clair_Obscur%3A_Expedition_33
+  Death Stranding 2: On the Beach (Twitch category 1630297266, SullyGnome 129845, released 2025-06-26)
+    https://sullygnome.com/game/Death_Stranding_2%3A_On_the_Beach
+  FINAL FANTASY VII REBIRTH (Twitch category 1102949822, SullyGnome 81197, released 2024-02-29)
+    https://sullygnome.com/game/FINAL_FANTASY_VII_REBIRTH
+  The Last of Us Part II (Twitch category 494552, SullyGnome 29527, released 2020-06-19)
+    https://sullygnome.com/game/The_Last_of_Us_Part_II
+  Ghost of Tsushima (Twitch category 499856, SullyGnome 49397, released 2020-07-17)
+    https://sullygnome.com/game/Ghost_of_Tsushima
+  Halo Infinite (Twitch category 506416, SullyGnome 43778, released 2021-12-08)
+    https://sullygnome.com/game/Halo_Infinite
+  Forza Horizon 5 (Twitch category 1757732267, SullyGnome 89318, released 2021-11-09)
+    https://sullygnome.com/game/Forza_Horizon_5
+  Stellar Blade (Twitch category 512034, SullyGnome 95661, released 2024-04-26)
+    https://sullygnome.com/game/Stellar_Blade
+  ARC Raiders (Twitch category 464339927, SullyGnome 144467, released 2025-10-30)
+    https://sullygnome.com/game/ARC_Raiders
+  Marvel Rivals (Twitch category 1264310518, SullyGnome 163969, released 2024-12-06)
+    https://sullygnome.com/game/Marvel_Rivals
+  HELLDIVERS 2 (Twitch category 766571430, SullyGnome 141999, released 2024-02-08)
+    https://sullygnome.com/game/HELLDIVERS_2
+  Grand Theft Auto VI category before release (2026-08-27 extended-look premiere onward) (Twitch category 1867279146, SullyGnome 229485, points 2026-08-27T17:00:00Z to 2026-11-17T02:00:00Z)
+    https://sullygnome.com/game/Grand_Theft_auto_VI_1867279146
+
+The final case (h00) is Grand Theft Auto VI's release day, 2026-11-19 UTC. Its history, its known hour 1 and the
+hours it is scored on are make.fun's own recorder's minute reads (collector/twitch-ccu in the make.fun repository) of
+Twitch's public directory count for the category (Twitch game id 1867279146), once a minute:
+
+  POST https://gql.twitch.tv/gql   (header Client-Id: kimne78kx3ncx6brgo4mv6wki5h1ko, Twitch's public web client id)
+  { game(id: "1867279146") { id name viewersCount broadcastersCount } }
+
+viewersCount is the concurrent live viewers Twitch's directory page shows for the category, broadcastersCount its live
+channels. An hour's figure in the final is the mean of that hour's valid minute reads, rounded half up, when the hour
+has at least 30 of them (hour 1, at least one).
